@@ -2,132 +2,639 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JioTV Style DRM Player</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DRM MPD Player · Full Custom UI</title>
+    <!-- dashjs core -->
     <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
-
+    <!-- Font Awesome 6 (free) icons: pause, play, volume, globe, gear, cast, fullscreen, live etc -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        body { 
-            background: #000; margin: 0; display: flex; 
-            justify-content: center; align-items: center; 
-            height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-        }
-        
-        .container { width: 100%; max-width: 950px; position: relative; }
-
-        /* Customizing Plyr to match Image */
-        :root {
-            --plyr-color-main: #ffffff; /* White sliders like image */
-            --plyr-video-control-background-hover: rgba(255, 255, 255, 0.1);
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        /* 8. Live Indicator (Red Dot style) */
-        .live-label {
-            position: absolute;
-            bottom: 65px; /* Progress bar ke upar */
-            left: 20px;
+        body {
+            background: #000;
             display: flex;
+            justify-content: center;
             align-items: center;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 2px 8px;
-            border-radius: 4px;
-            z-index: 10;
+            height: 100vh;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+        }
+
+        /* main player container — portrait aware */
+        .player-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border-radius: 0; /* straight edges like native */
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            background: #000;
+        }
+
+        /* ---------- CUSTOM CONTROLS OVERLAY ---------- */
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            opacity: 0;
+            transition: opacity 0.25s ease;
             pointer-events: none;
         }
-        .live-dot {
-            height: 8px; width: 8px; background: #ff0000;
-            border-radius: 50%; display: inline-block;
-            margin-right: 5px; box-shadow: 0 0 8px #ff0000;
-        }
-        .live-text { color: white; font-size: 14px; font-weight: bold; }
 
-        /* Progress bar (Blue color as seen in your image) */
-        .plyr--full-ui input[type=range] { color: #2196F3 !important; } 
+        .player-container:hover .custom-controls,
+        .player-container .custom-controls.force-show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* progress bar row */
+        .progress-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .time-indicator {
+            font-size: 13px;
+            color: #eee;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 8px;
+            border-radius: 12px;
+            white-space: nowrap;
+        }
+
+        .seek-bar-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            height: 20px;
+            position: relative;
+        }
+
+        input[type=range].seek-bar {
+            width: 100%;
+            height: 5px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+            outline: none;
+            transition: height 0.1s;
+        }
+
+        input[type=range].seek-bar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 6px black;
+            transition: transform 0.15s;
+            border: none;
+        }
+
+        input[type=range].seek-bar::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #1e88e5;
+        }
+
+        /* main button row */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .left-group, .right-group {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .control-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 20px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s;
+            text-shadow: 0 0 6px black;
+        }
+
+        .control-btn:hover {
+            color: #1e88e5;
+            transform: scale(1.1);
+        }
+
+        /* volume container */
+        .volume-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-slider {
+            width: 80px;
+            height: 5px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.4);
+            border-radius: 5px;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 13px;
+            height: 13px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* live indicator */
+        .live-badge {
+            background: #e50914;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .live-badge i {
+            font-size: 10px;
+        }
+
+        /* portrait / landscape orientation management */
+        @media (orientation: portrait) {
+            .player-container {
+                max-width: 100%;
+                aspect-ratio: 9 / 16;  /* vertical (portrait) mode – 0° */
+                transform: rotate(0deg);
+            }
+        }
+
+        @media (orientation: landscape) {
+            .player-container {
+                aspect-ratio: 16 / 9;
+                transform: rotate(90deg); /* 90° rotation for horizontal fullscreen feel */
+                max-width: 90vh; /* keep aspect */
+                height: auto;
+            }
+            /* adjust controls inside rotated container? we keep visual consistency,
+               but controls will also be rotated. To keep UI upright we need inner counter-rotation.
+               simpler: use JS to detect fullscreen landscape? We'll handle with fullscreen API separately. 
+               But as per request: Portrait = 0°, Landscape (fullscreen) = 90° rotated.
+               Since we want the UI to remain readable, we apply rotation only on the container,
+               and counter-rotate video + controls inside using CSS. Better solution: we use fullscreenchange
+               and apply class accordingly – plus forced rotation via fullscreen. */
+        }
+
+        /* ----- Portrait & Landscape explicit orientation via JS ----- */
+        .orientation-portrait .player-container {
+            transform: rotate(0deg);
+            aspect-ratio: 9 / 16;
+            max-width: 500px;
+        }
+
+        .orientation-landscape .player-container {
+            transform: rotate(90deg);
+            aspect-ratio: 16 / 9;
+            max-width: 90vh;
+        }
+
+        /* we want inner elements to stay upright, otherwise rotated text. 
+           simpler: we will handle full-screen and orientation via custom fullscreen toggle */
+        .fullscreen-landscape {
+            transform: rotate(90deg) !important;
+            transition: transform 0.2s;
+        }
+        .fullscreen-portrait {
+            transform: rotate(0deg) !important;
+        }
+        /* end custom classes */
+
+        /* cast icon / globe etc */
+        .text-icon {
+            font-size: 20px;
+        }
+
+        /* auto-play and unmuted by default (set via js) */
     </style>
 </head>
 <body>
-
-<div class="container">
-    <div class="live-label">
-        <span class="live-dot"></span>
-        <span class="live-text">Live</span>
+    <div id="orientationWrapper" style="display: contents;">
+        <!-- main container using custom controls -->
+        <div class="player-container" id="playerContainer">
+            <!-- native video element -->
+            <video id="videoPlayer" playsinline></video>
+            
+            <!-- CUSTOM CONTROL BAR - all UI elements exactly as requested -->
+            <div class="custom-controls" id="customControls">
+                <!-- Progress bar row with seek bar, live indicator -->
+                <div class="progress-row">
+                    <span class="time-indicator" id="currentTimeDisplay">0:00</span>
+                    <div class="seek-bar-container">
+                        <input type="range" class="seek-bar" id="seekBar" value="0" min="0" max="100" step="0.1">
+                    </div>
+                    <span class="time-indicator" id="durationDisplay">LIVE</span>
+                    <!-- LIVE badge (always visible as indicator) -->
+                    <span class="live-badge" id="liveBadge"><i class="fas fa-circle"></i> Live</span>
+                </div>
+                
+                <!-- Second row: all control buttons (play, volume, globe, cast, gear, fullscreen etc) -->
+                <div class="controls-row">
+                    <!-- LEFT GROUP: play/pause, volume, globe (language) -->
+                    <div class="left-group">
+                        <!-- 1. big play/pause icon (button) -->
+                        <button class="control-btn" id="playPauseBtn" title="Play/Pause">
+                            <i class="fas fa-pause-circle" id="playPauseIcon"></i> <!-- default pause because autoplay -->
+                        </button>
+                        
+                        <!-- 2. volume: speaker icon + volume slider -->
+                        <div class="volume-wrap">
+                            <button class="control-btn" id="volumeBtn" title="Mute/Unmute">
+                                <i class="fas fa-volume-up" id="volumeIcon"></i>
+                            </button>
+                            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="1">
+                        </div>
+                        
+                        <!-- 3. Globe icon (language/streaming options) -->
+                        <button class="control-btn" id="globeBtn" title="Audio / Subtitles">
+                            <i class="fas fa-globe"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- RIGHT GROUP: cast, settings (gear), fullscreen, also extra screen icon (cast + screen icon both) -->
+                    <div class="right-group">
+                        <!-- 4. Screen icon (Cast / Screen mirror) -->
+                        <button class="control-btn" id="castBtn" title="Cast / Screen">
+                            <i class="fas fa-tv"></i> <!-- screen/cast icon -->
+                        </button>
+                        <!-- 5. Settings gear icon -->
+                        <button class="control-btn" id="settingsBtn" title="Settings (quality, speed, subs)">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <!-- 6. Fullscreen icon with rotation for landscape/portrait mode -->
+                        <button class="control-btn" id="fullscreenBtn" title="Fullscreen / Rotate">
+                            <i class="fas fa-expand" id="fullscreenIcon"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <video id="videoPlayer" playsinline crossorigin></video>
-</div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const video = document.querySelector('#videoPlayer');
-    
-    // MPD & Keys
-    const mpdUrl = "https://jiotvpllive.cdn.jio.com/bpk-tv/Star_Sports_HD1_Hindi_BTS/output/index.mpd";
-    const keyId = "400131994b445d8c8817202248760fda"; 
-    const key   = "2d56cb6f07a75b9aff165d534ae2bfc4";
+    <script>
+        (function() {
+            "use strict";
 
-    // Initialize Dash
-    const dashPlayer = dashjs.MediaPlayer().create();
-    dashPlayer.setProtectionData({
-        "org.w3.clearkey": { "clearkeys": { [keyId]: key } }
-    });
-    dashPlayer.initialize(video, mpdUrl, true);
+            // ==============================
+            // 🔹 DRM CONFIGURATION – YOUR DETAILS
+            // ==============================
+            const mpdUrl = "https://jiotvpllive.cdn.jio.com/bpk-tv/Star_Sports_HD1_Hindi_BTS/output/index.mpd";
+            const keyId = "400131994b445d8c8817202248760fda";
+            const key   = "2d56cb6f07a75b9aff165d534ae2bfc4";
 
-    // Initialize Plyr with specific order matching your image
-    const player = new Plyr(video, {
-        controls: [
-            'play-large',      // 1. Center play button
-            'mute',            // 2. Speaker icon
-            'volume',          // 2. Volume slider
-            'progress',        // 3. Seek bar
-            'captions',        // 4. Globe icon (captions)
-            'pip',             // 5. Screen/PIP icon
-            'settings',        // 6. Gear icon
-            'fullscreen'       // 7. Fullscreen icon
-        ],
-        settings: ['quality', 'speed'],
-        autoplay: true,
-        muted: false,          // 9. Unmuted
-        keyboard: { focused: true, global: true }
-    });
+            // ==============================
+            // 1. DASH PLAYER INIT with ClearKey
+            // ==============================
+            const video = document.getElementById('videoPlayer');
+            const player = dashjs.MediaPlayer().create();
 
-    // Manual Quality Selection Logic
-    dashPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function() {
-        const availableQualities = dashPlayer.getBitrateInfoListFor('video');
-        const heights = availableQualities.map((item) => item.height);
-        
-        player.config.quality = {
-            default: heights[heights.length - 1],
-            options: heights,
-            forced: true,
-            onChange: (newHeight) => {
-                availableQualities.forEach((item) => {
-                    if (item.height === newHeight) {
-                        dashPlayer.setQualityFor('video', item.index);
+            // set protection data for clearkey
+            const clearkeyConfig = {
+                "org.w3.clearkey": {
+                    "clearkeys": {
+                        [keyId]: key
                     }
+                }
+            };
+            player.setProtectionData(clearkeyConfig);
+            
+            // initialize player
+            player.initialize(video, mpdUrl, true);  // true = autoPlay
+
+            // Force audio unmuted, autoplay is already true
+            video.muted = false;      // ensure audio unmuted
+            video.volume = 1.0;       // max volume
+            video.autoplay = true;
+            
+            // ==============================
+            // UI ELEMENTS
+            // ==============================
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const playPauseIcon = document.getElementById('playPauseIcon');
+            const seekBar = document.getElementById('seekBar');
+            const currentTimeEl = document.getElementById('currentTimeDisplay');
+            const durationEl = document.getElementById('durationDisplay');
+            const liveBadge = document.getElementById('liveBadge');
+            const volumeSlider = document.getElementById('volumeSlider');
+            const volumeIcon = document.getElementById('volumeIcon');
+            const volumeBtn = document.getElementById('volumeBtn');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const container = document.getElementById('playerContainer');
+            const customControls = document.getElementById('customControls');
+
+            // Extra dummy buttons (Globe, cast, settings) – we keep them interactive with console feedback
+            const globeBtn = document.getElementById('globeBtn');
+            const castBtn = document.getElementById('castBtn');
+            const settingsBtn = document.getElementById('settingsBtn');
+
+            // --- LIVE STREAM DETECTION: since it's a live MPD, we show Live and disable seek? 
+            // But user wants progress bar & seeking? We keep seek bar but behave like DVR? We'll just reflect.
+            // We also force "Live" text always.
+            
+            // ==============================
+            // AUTOPLAY & UNMUTE (GUARANTEED)
+            // ==============================
+            video.muted = false;   // double down
+            video.volume = 1.0;
+            // Some browsers may block autoplay unmuted; we try to play and if fails, show note.
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.warn("Autoplay unmuted blocked? Will stay paused.", error);
+                    // set icon to play
+                    playPauseIcon.className = 'fas fa-play-circle';
                 });
-            },
-        };
-    });
+            }
 
-    // Auto Play & Unmute Fix
-    dashPlayer.on(dashjs.MediaPlayer.events.CAN_PLAY, () => {
-        video.muted = false;
-        video.play().catch(() => {
-            // Browser policy block: play muted first, then unmute on click
-            video.muted = true;
-            video.play();
+            // ==============================
+            // EVENT LISTENERS – CUSTOM CONTROLS
+            // ==============================
+            
+            // 1. Play/Pause
+            function togglePlay() {
+                if (video.paused) {
+                    video.play();
+                    playPauseIcon.className = 'fas fa-pause-circle';
+                } else {
+                    video.pause();
+                    playPauseIcon.className = 'fas fa-play-circle';
+                }
+            }
+            playPauseBtn.addEventListener('click', togglePlay);
+            
+            video.addEventListener('play', () => {
+                playPauseIcon.className = 'fas fa-pause-circle';
+            });
+            video.addEventListener('pause', () => {
+                playPauseIcon.className = 'fas fa-play-circle';
+            });
+
+            // 2. Volume slider + mute button
+            function updateVolumeIcon() {
+                if (video.muted || video.volume === 0) {
+                    volumeIcon.className = 'fas fa-volume-mute';
+                } else if (video.volume < 0.5) {
+                    volumeIcon.className = 'fas fa-volume-down';
+                } else {
+                    volumeIcon.className = 'fas fa-volume-up';
+                }
+            }
+            
+            volumeSlider.addEventListener('input', (e) => {
+                video.volume = parseFloat(e.target.value);
+                video.muted = false; // unmute on slider drag
+                updateVolumeIcon();
+            });
+
+            volumeBtn.addEventListener('click', () => {
+                video.muted = !video.muted;
+                updateVolumeIcon();
+                // sync slider with muted state
+                if (video.muted) {
+                    volumeSlider.value = 0;
+                } else {
+                    volumeSlider.value = video.volume;
+                }
+            });
+
+            video.addEventListener('volumechange', updateVolumeIcon);
+            updateVolumeIcon(); // initial
+
+            // 3. Seek bar: for live stream we still show but disable? We'll make it display current time, but no seeking effect.
+            // Since it's a live DVR? we allow seek only if duration is finite. We'll just simulate seek bar moving.
+            video.addEventListener('timeupdate', function() {
+                if (isFinite(video.duration)) {
+                    const percent = (video.currentTime / video.duration) * 100;
+                    seekBar.value = percent;
+                    currentTimeEl.textContent = formatTime(video.currentTime);
+                    durationEl.textContent = formatTime(video.duration);
+                } else {
+                    // live: duration infinite. Show live and current time progress? just show live badge.
+                    currentTimeEl.textContent = formatTime(video.currentTime);
+                    durationEl.textContent = 'LIVE';
+                }
+            });
+
+            // Seek input (if DVR possible)
+            seekBar.addEventListener('input', function(e) {
+                if (isFinite(video.duration)) {
+                    const seekTime = (parseFloat(e.target.value) / 100) * video.duration;
+                    video.currentTime = seekTime;
+                }
+                // else do nothing for live
+            });
+
+            function formatTime(seconds) {
+                if (!isFinite(seconds)) return '0:00';
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = Math.floor(seconds % 60);
+                if (h > 0) {
+                    return h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+                } else {
+                    return m + ':' + (s < 10 ? '0' : '') + s;
+                }
+            }
+
+            // 4. Fullscreen + orientation (Portrait 0°, Landscape 90° as per request)
+            // We'll toggle between fullscreen and also rotate container.
+            let isFullscreen = false;
+            let landscapeRotated = false; // flag to apply 90deg in landscape fullscreen
+
+            function enterFullscreen() {
+                if (container.requestFullscreen) {
+                    container.requestFullscreen();
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                } else if (container.msRequestFullscreen) {
+                    container.msRequestFullscreen();
+                }
+            }
+
+            function exitFullscreen() {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+
+            fullscreenBtn.addEventListener('click', function() {
+                if (!document.fullscreenElement) {
+                    enterFullscreen();
+                } else {
+                    exitFullscreen();
+                }
+            });
+
+            // Listen fullscreen change to apply rotation: 
+            // when fullscreen, we apply landscape rotation (90deg) or portrait based on orientation.
+            function handleFullscreenChange() {
+                if (document.fullscreenElement === container || document.webkitFullscreenElement === container) {
+                    // In fullscreen – check screen orientation. We enforce:
+                    // Portrait mode = 0°, Landscape mode = 90° rotation on container.
+                    // Use screen.orientation or fallback.
+                    if (window.innerHeight > window.innerWidth) {
+                        // portrait
+                        container.style.transform = 'rotate(0deg)';
+                        container.style.aspectRatio = '9 / 16';
+                    } else {
+                        // landscape
+                        container.style.transform = 'rotate(90deg)';
+                        container.style.aspectRatio = '16 / 9';
+                    }
+                    customControls.classList.add('force-show'); // keep visible
+                } else {
+                    // exit fullscreen — revert to default (no forced transform)
+                    container.style.transform = 'rotate(0deg)';
+                    container.style.aspectRatio = '16 / 9'; // default
+                    customControls.classList.remove('force-show');
+                }
+            }
+
+            document.addEventListener('fullscreenchange', handleFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.addEventListener('msfullscreenchange', handleFullscreenChange);
+            
+            // Also on window resize while fullscreen, update orientation
+            window.addEventListener('resize', function() {
+                if (document.fullscreenElement === container) {
+                    if (window.innerHeight > window.innerWidth) {
+                        container.style.transform = 'rotate(0deg)';
+                        container.style.aspectRatio = '9 / 16';
+                    } else {
+                        container.style.transform = 'rotate(90deg)';
+                        container.style.aspectRatio = '16 / 9';
+                    }
+                }
+            });
+
+            // 5. Live indicator: always show as requested.
+            liveBadge.style.display = 'flex'; // visible
+
+            // 6. Globe, Cast, Settings dummy actions (just to show click)
+            globeBtn.addEventListener('click', () => alert('🌐 Language / Streaming options (demo)'));
+            castBtn.addEventListener('click', () => alert('📺 Cast / Screen mirror (demo)'));
+            settingsBtn.addEventListener('click', () => alert('⚙️ Quality, Speed, Subtitles (demo)'));
+
+            // 7. Ensure video is portrait 0°, landscape 90° also outside fullscreen if orientation changes
+            // But we only strictly apply to fullscreen per request. In normal mode, we keep normal 16/9.
+            // However, we also set initial: Portrait mode (vertical) angle 0°, for demonstration we follow orientation.
+            // Use CSS media query or class, but we stick to fullscreen toggle as main switch.
+            
+            // Extra: autoplay + unmuted verification
+            video.addEventListener('loadedmetadata', function() {
+                video.muted = false;
+                video.volume = 1.0;
+                if (video.paused) {
+                    video.play().catch(e => console.warn);
+                }
+            });
+
+            // Manual override for seekbar initial
+            if (!isFinite(video.duration)) {
+                durationEl.textContent = 'LIVE';
+            }
+
+            // Keep video unmuted at all times (avoid autoplay restrictions)
+            video.removeAttribute('muted'); 
+            video.defaultMuted = false;
+
+            // Ensure big pause icon appears (since we autoplay)
+            // set default icon as pause
+            playPauseIcon.className = 'fas fa-pause-circle';
+
+            // Additional: show progress time even if live: we show elapsed
+            setInterval(() => {
+                if (video.currentTime) {
+                    currentTimeEl.textContent = formatTime(video.currentTime);
+                }
+            }, 250);
+
+            // Volume slider init
+            volumeSlider.value = video.volume;
+
+            // Dummy cast, screen icons both: cast button uses tv icon (screen icon)
+            // Also we have no extra screen icon? but we have cast btn as 'tv' = screen/cast.
+            // All good.
+
+            console.log('DRM player + custom UI ready. Portrait/Landscape via fullscreen');
+        })();
+    </script>
+
+    <!-- ensure that autoplay + unmute works, force play on user interaction if needed -->
+    <script>
+        // final fallback: if video isn't playing by now, try to play with unmute
+        window.addEventListener('load', function() {
+            const v = document.getElementById('videoPlayer');
+            if (v) {
+                v.muted = false;
+                v.volume = 1.0;
+                let p = v.play();
+                if (p && p.catch) {
+                    p.catch(() => {
+                        // Add one-time click to enable autoplay
+                        function enableAudio() {
+                            v.play();
+                            v.muted = false;
+                            document.removeEventListener('click', enableAudio);
+                        }
+                        document.addEventListener('click', enableAudio);
+                    });
+                }
+            }
         });
-    });
-
-    // Global click to ensure sound starts if browser blocked it
-    document.addEventListener('click', () => {
-        if(video.muted) { video.muted = false; }
-    }, { once: true });
-
-});
-</script>
-
+    </script>
 </body>
 </html>

@@ -1,59 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>DRM MPD Player</title>
-<script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
-
-<style>
-body {
-    background: #000;
-    margin: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-}
-video {
-    width: 100%;
-    max-width: 900px;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JioTV Style DRM Player</title>
     
-}
-</style>
-</head>
+    <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
+    <style>
+        body { 
+            background: #000; margin: 0; display: flex; 
+            justify-content: center; align-items: center; 
+            height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        
+        .container { width: 100%; max-width: 950px; position: relative; }
+
+        /* Customizing Plyr to match Image */
+        :root {
+            --plyr-color-main: #ffffff; /* White sliders like image */
+            --plyr-video-control-background-hover: rgba(255, 255, 255, 0.1);
+        }
+
+        /* 8. Live Indicator (Red Dot style) */
+        .live-label {
+            position: absolute;
+            bottom: 65px; /* Progress bar ke upar */
+            left: 20px;
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 8px;
+            border-radius: 4px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .live-dot {
+            height: 8px; width: 8px; background: #ff0000;
+            border-radius: 50%; display: inline-block;
+            margin-right: 5px; box-shadow: 0 0 8px #ff0000;
+        }
+        .live-text { color: white; font-size: 14px; font-weight: bold; }
+
+        /* Progress bar (Blue color as seen in your image) */
+        .plyr--full-ui input[type=range] { color: #2196F3 !important; } 
+    </style>
+</head>
 <body>
 
-<video id="videoPlayer" controls></video>
+<div class="container">
+    <div class="live-label">
+        <span class="live-dot"></span>
+        <span class="live-text">Live</span>
+    </div>
+    <video id="videoPlayer" playsinline crossorigin></video>
+</div>
 
 <script>
-    // ==============================
-    // 🔹 Yaha apni details daalo
-    // ==============================
+document.addEventListener('DOMContentLoaded', () => {
+    const video = document.querySelector('#videoPlayer');
+    
+    // MPD & Keys
+    const mpdUrl = "https://jiotvpllive.cdn.jio.com/bpk-tv/Star_Sports_HD1_Hindi_BTS/output/index.mpd";
+    const keyId = "400131994b445d8c8817202248760fda"; 
+    const key   = "2d56cb6f07a75b9aff165d534ae2bfc4";
 
-    var mpdUrl = "https://jiotvpllive.cdn.jio.com/bpk-tv/Star_Sports_HD1_Hindi_BTS/output/index.mpd";
+    // Initialize Dash
+    const dashPlayer = dashjs.MediaPlayer().create();
+    dashPlayer.setProtectionData({
+        "org.w3.clearkey": { "clearkeys": { [keyId]: key } }
+    });
+    dashPlayer.initialize(video, mpdUrl, true);
 
-    var keyId = "400131994b445d8c8817202248760fda"; 
-    var key   = "2d56cb6f07a75b9aff165d534ae2bfc4";
-
-    // ==============================
-
-    var player = dashjs.MediaPlayer().create();
-
-    player.setProtectionData({
-        "org.w3.clearkey": {
-            "clearkeys": {
-                [keyId]: key
-            }
-        }
+    // Initialize Plyr with specific order matching your image
+    const player = new Plyr(video, {
+        controls: [
+            'play-large',      // 1. Center play button
+            'mute',            // 2. Speaker icon
+            'volume',          // 2. Volume slider
+            'progress',        // 3. Seek bar
+            'captions',        // 4. Globe icon (captions)
+            'pip',             // 5. Screen/PIP icon
+            'settings',        // 6. Gear icon
+            'fullscreen'       // 7. Fullscreen icon
+        ],
+        settings: ['quality', 'speed'],
+        autoplay: true,
+        muted: false,          // 9. Unmuted
+        keyboard: { focused: true, global: true }
     });
 
-    player.initialize(
-        document.querySelector("#videoPlayer"),
-        mpdUrl,
-        true
-    );
+    // Manual Quality Selection Logic
+    dashPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function() {
+        const availableQualities = dashPlayer.getBitrateInfoListFor('video');
+        const heights = availableQualities.map((item) => item.height);
+        
+        player.config.quality = {
+            default: heights[heights.length - 1],
+            options: heights,
+            forced: true,
+            onChange: (newHeight) => {
+                availableQualities.forEach((item) => {
+                    if (item.height === newHeight) {
+                        dashPlayer.setQualityFor('video', item.index);
+                    }
+                });
+            },
+        };
+    });
 
+    // Auto Play & Unmute Fix
+    dashPlayer.on(dashjs.MediaPlayer.events.CAN_PLAY, () => {
+        video.muted = false;
+        video.play().catch(() => {
+            // Browser policy block: play muted first, then unmute on click
+            video.muted = true;
+            video.play();
+        });
+    });
+
+    // Global click to ensure sound starts if browser blocked it
+    document.addEventListener('click', () => {
+        if(video.muted) { video.muted = false; }
+    }, { once: true });
+
+});
 </script>
 
 </body>
